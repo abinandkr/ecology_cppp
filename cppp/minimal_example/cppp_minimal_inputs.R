@@ -92,6 +92,24 @@ chisqDiscFunction <- nimbleFunction(
   }
 )
 
+## chi-squared discrepancy function on z
+## Discrepancy function used only when conditioning on latent states
+chisqZDiscFunction <- nimbleFunction(
+  contains = discrepancyFunction_BASE,
+  setup = function(model, discrepancyFunctionsArgs){
+  },
+  run = function() {
+    
+    # z_exp = psi
+    # calculate chi squared discrepancy measure
+    chi_out <- (model$z - model$psi) ^ 2 / (model$z + 1e-6)
+    
+    returnType(double(0)) 
+    return(sum(chi_out))
+  }
+)
+
+
 ## ratio discrepancy function
 ratioDiscFunction <- nimbleFunction(
   contains = discrepancyFunction_BASE,
@@ -133,10 +151,28 @@ tukeyDiscFunction <- nimbleFunction(
   }
 )
 
+## tukey discrepancy function
+## Discrepancy function used only when conditioning on latent states
+tukeyZDiscFunction <- nimbleFunction(
+  contains = discrepancyFunction_BASE,
+  setup = function(model, discrepancyFunctionsArgs){
+  },
+  run = function() {
+    
+    # z_exp = psi
+    # calculate freeman tukey discrepancy measure
+    tukey_out <- (sqrt(model$z) - sqrt(model$psi)) ^ 2
+    
+    returnType(double(0)) 
+    return(sum(tukey_out))
+  }
+)
+
 ## deviance discrepancy function
 devianceDiscFunction <- nimbleFunction(
   contains = discrepancyFunction_BASE,
   setup = function(model, discrepancyFunctionsArgs){
+    nVisits <- discrepancyFunctionsArgs[["nVisits"]]
   },
   run = function() {
     
@@ -152,6 +188,7 @@ devianceDiscFunction <- nimbleFunction(
 ###################
 # function inputs #
 ###################
+latentNames <- "z"
 
 dataNames <- "y"
 
@@ -159,16 +196,26 @@ dataNames <- "y"
 paramNames <- c("p", "psi")
 simNodes <- c("z", "y")
 
-# if conditioning on latent state
-paramNames <- c("p", "psi", "z")
-simNodes <- "y"
-
 discrepancyFunctions <- list(chisqDiscFunction, ratioDiscFunction,
                              tukeyDiscFunction, devianceDiscFunction)
+
 discrepancyFunctionsArgs <- list(list(nVisits = nVisits),
                                  list(nVisits = nVisits),
                                  list(nVisits = nVisits),
-                                 list())
+                                 list(nVisits = nVisits))
+
+
+# if conditioning on latent state
+
+if(!is.null(latentNames)){
+  
+  paramNames <- c(paramNames,latentNames)
+  simNodes <- simNodes[!simNodes %in% latentNames]
+
+  # Adding discrepancy measures on z if conditioning on latent states. 
+  discrepancyFunctions <- c(discrepancyFunctions,chisqZDiscFunction, tukeyZDiscFunction)
+  discrepancyFunctionsArgs <- c(discrepancyFunctionsArgs,list(list()),list(list()))
+}
 
 
 # calculate discrepancies
